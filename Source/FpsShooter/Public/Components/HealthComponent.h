@@ -35,7 +35,7 @@ public:
 	void TakeDamage(const float Damage);
 
 	// Лечение
-	UFUNCTION(BlueprintCallable, Category = "Health")
+	UFUNCTION(BlueprintCallable, Category = "Health", meta=(ToolTip="Нанесение лечения"))
 	void TakeHeal(const float HealAmount);
 	
 protected:
@@ -50,7 +50,7 @@ private:
 	float MaxHealth = 100.0f;
 	// Текущее здоровье
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentHealth)
-	float CurrentHealth = MaxHealth;
+	float CurrentHealth = 100.0f;
 	// Флаг смерти
 	UPROPERTY(ReplicatedUsing = OnRep_IsDead)
 	bool bIsDead = false;
@@ -75,6 +75,5 @@ private:
 	// Репликация флага смерти
 	UFUNCTION()
 	void OnRep_IsDead();
-
-		
+	
 };

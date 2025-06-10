@@ -2,17 +2,16 @@
 
 
 #include "Framework/FpsBaseCharacter.h"
-
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 
-// Sets default values
+
 AFpsBaseCharacter::AFpsBaseCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 
 	// Создаем компонент камеры
@@ -36,18 +35,29 @@ AFpsBaseCharacter::AFpsBaseCharacter()
 	ThirdPersonMesh->SetupAttachment(GetRootComponent());
 	ThirdPersonMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
 	ThirdPersonMesh->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
-
 }
 
 void AFpsBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME(AFpsBaseCharacter, ControlRotation_Rep);
 }
 
 void AFpsBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	
+}
+
+void AFpsBaseCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (GetController() && (IsLocallyControlled() || HasAuthority()))
+	{
+		ControlRotation_Rep = GetController()->GetControlRotation();
+	}
 }
 
 void AFpsBaseCharacter::NotifyControllerChanged()
@@ -77,12 +87,11 @@ void AFpsBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AFpsBaseCharacter::StopJump);
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::ToggleCrouch);
 	}
-
 }
 
 void AFpsBaseCharacter::Move(const FInputActionValue& Value)
 {
-	FVector2D MovementVector = Value.Get<FVector2D>();
+	const FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
@@ -93,7 +102,7 @@ void AFpsBaseCharacter::Move(const FInputActionValue& Value)
 
 void AFpsBaseCharacter::Look(const FInputActionValue& Value)
 {
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
+	const FVector2D LookAxisVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
@@ -139,4 +148,3 @@ void AFpsBaseCharacter::UpdateMeshVisibility()
 		ThirdPersonMesh->SetVisibility(true, true);
 	}
 }
-

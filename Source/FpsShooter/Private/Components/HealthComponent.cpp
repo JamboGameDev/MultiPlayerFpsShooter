@@ -2,7 +2,6 @@
 
 
 #include "Components/HealthComponent.h"
-
 #include "Net/UnrealNetwork.h"
 
 
@@ -20,6 +19,16 @@ void UHealthComponent::TakeDamage(const float Damage)
 	if (GetOwner()->HasAuthority())
 	{
 		Server_TakeDamage(Damage);
+	}
+}
+
+void UHealthComponent::TakeHeal(const float HealAmount)
+{
+	if (HealAmount <= KINDA_SMALL_NUMBER || !GetOwner() || !IsAlive()) return;
+	
+	if (GetOwner()->HasAuthority())
+	{
+		Server_Heal(HealAmount);
 	}
 }
 
@@ -99,5 +108,5 @@ void UHealthComponent::OnRep_CurrentHealth()
 
 void UHealthComponent::OnRep_IsDead()
 {
-	
+	// Делегат смерти для клиента
 }
