@@ -7,6 +7,7 @@
 #include "FpsBaseCharacter.generated.h"
 
 class UCameraComponent;
+class UHealthComponent;
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
@@ -23,10 +24,11 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Получения реплицированного поворота контроллера (как пример) */
-	UFUNCTION(BlueprintCallable, BlueprintPure)
-	FORCEINLINE FRotator GetControlRotationRep() const { return ControlRotation_Rep; }
+	//UFUNCTION(BlueprintCallable, BlueprintPure)
+	//FORCEINLINE FRotator GetControlRotationRep() const { return ControlRotation_Rep; }
 	
 protected:
+	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void NotifyControllerChanged() override;
@@ -44,13 +46,20 @@ protected:
 	UInputAction* JumpAction;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* CrouchAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
+	UInputAction* Fire;
 	
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void StartJump();
 	void StopJump();
 	void ToggleCrouch();
-	void UpdateMeshVisibility();
+	void UpdateMeshVisibility(const bool bAlive);
+	void FireStart();
+	void FireStop();
+	
+	UFUNCTION(meta = (ToolTip = "Реакция на смерть"))
+	void OnCharacterDied();
 
 private:
 	/** Компонент камеры */
@@ -63,7 +72,14 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ThirdPersonMesh;
 
+	// Свой компонент здоровья
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UHealthComponent* HealthComponent;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayDeathEffects();
+
 	/** Реплицированный поворот камеры */
-	UPROPERTY(Replicated)
-	FRotator ControlRotation_Rep;
+	//UPROPERTY(Replicated)
+	//FRotator ControlRotation_Rep;
 };

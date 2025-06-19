@@ -6,6 +6,11 @@
 #include "Components/ActorComponent.h"
 #include "HealthComponent.generated.h"
 
+// @param Health - текущее значение здоровья
+// @param AmountChange - изменение здоровья (положительное - лечение, отрицательное - урон)
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChangedSignature, float, Health, float, AmountChange);
+DECLARE_DELEGATE(FOnDeathSignature); // Только один подписчик
+
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class FPSSHOOTER_API UHealthComponent : public UActorComponent
@@ -14,6 +19,13 @@ class FPSSHOOTER_API UHealthComponent : public UActorComponent
 
 public:
 	UHealthComponent();
+
+	// Делегат изменения здоровья для блюпринтов
+	UPROPERTY(BlueprintAssignable, Category = "Health")
+	FOnHealthChangedSignature OnHealthChanged;
+	
+	// Делегат смерти для использования в С++
+	FOnDeathSignature OnDeath;
 	
 	// Получить текущее здоровье
 	UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Health")
@@ -37,6 +49,14 @@ public:
 	// Лечение
 	UFUNCTION(BlueprintCallable, Category = "Health", meta=(ToolTip="Нанесение лечения"))
 	void TakeHeal(const float HealAmount);
+
+	// Функции обёртки для подвязки на делегаты
+	UFUNCTION()
+	void HandleAnyDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser );
+	UFUNCTION()
+	void HandlePointDamage(AActor* DamagedActor, float Damage, class AController* InstigatedBy, FVector HitLocation, class UPrimitiveComponent* FHitComponent, FName BoneName, FVector ShotFromDirection, const class UDamageType* DamageType, AActor* DamageCauser );
+	UFUNCTION()
+	void HandleRadialDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, FVector Origin, const FHitResult& HitInfo, class AController* InstigatedBy, AActor* DamageCauser );
 	
 protected:
 	virtual void BeginPlay() override;
@@ -54,6 +74,9 @@ private:
 	// Флаг смерти
 	UPROPERTY(ReplicatedUsing = OnRep_IsDead)
 	bool bIsDead = false;
+
+	// Хранит предыдущее значение здоровья после последней репликации, чтобы рассчитать дельту
+	float LastServerHealth = 100.0f;
 
 	// Начальная инициализация
 	void InitializeHealth();

@@ -32,6 +32,25 @@ void UHealthComponent::TakeHeal(const float HealAmount)
 	}
 }
 
+void UHealthComponent::HandleAnyDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType,
+	class AController* InstigatedBy, AActor* DamageCauser)
+{
+	TakeDamage(Damage);
+}
+
+void UHealthComponent::HandlePointDamage(AActor* DamagedActor, float Damage, class AController* InstigatedBy,
+	FVector HitLocation, class UPrimitiveComponent* FHitComponent, FName BoneName, FVector ShotFromDirection,
+	const class UDamageType* DamageType, AActor* DamageCauser)
+{
+	TakeDamage(Damage);
+}
+
+void UHealthComponent::HandleRadialDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType,
+	FVector Origin, const FHitResult& HitInfo, class AController* InstigatedBy, AActor* DamageCauser)
+{
+	TakeDamage(Damage);
+}
+
 void UHealthComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -85,22 +104,30 @@ void UHealthComponent::SetCurrentHealth(const float NewHealth)
 		if (FMath::Abs(Delta) > KINDA_SMALL_NUMBER) // Игнорируем микроизменения
 		{
 			CurrentHealth = NewHealth;
-			// Делегат здоровье изменилось для сервера
+			OnHealthChanged.Broadcast(NewHealth, Delta);
 		}
     
 		if (CurrentHealth <= 0.0f)
 		{
 			bIsDead = true;
-			// Делегат смерти для сервера
+			(void)OnDeath.ExecuteIfBound();
 		}
 	}
 }
 
 void UHealthComponent::OnRep_CurrentHealth()
 {
-	// Делегат здоровье изменилось для клиента
-
-	if (CurrentHealth <= 0.0f && !bIsDead) 
+	if (FMath::IsNearlyEqual(LastServerHealth, CurrentHealth, KINDA_SMALL_NUMBER))
+	{
+		return; // Изменений нет или они слишком малы
+	}
+	
+	const float Delta = CurrentHealth - LastServerHealth;
+	OnHealthChanged.Broadcast(CurrentHealth, Delta);
+	LastServerHealth = CurrentHealth;
+	
+	// если здоровье снизилось, но булевый смерти ещё не реплицировался...
+	if (CurrentHealth <= 0.0f && !bIsDead)
 	{
 		bIsDead = true;
 	}
