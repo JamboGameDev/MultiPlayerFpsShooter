@@ -25,8 +25,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Получения реплицированного поворота контроллера (как пример) */
-	UFUNCTION(BlueprintCallable, BlueprintPure)
-	FORCEINLINE FRotator GetControlRotationRep() const { return ControlRotation_Rep; }
+    UFUNCTION(BlueprintPure, BlueprintCallable)
+    FORCEINLINE FRotator GetControlRotation_Rep() const { return ControlRotation_Rep;}
+	UFUNCTION(BlueprintPure, BlueprintCallable)
+	FORCEINLINE FVector GetCameraLocation() const { return CameraLocation_Rep;}
 	
 protected:
 	virtual void PostInitializeComponents() override;
@@ -57,13 +59,6 @@ protected:
 	//------weapon
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeaponSlot")
 	TSubclassOf<AFpsWeaponBase> WeaponClass;
-
-	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_CurrentWeapon);
-	AFpsWeaponBase* CurrentWeapon;
-
-	UFUNCTION()
-	void OnRep_CurrentWeapon();
-	//------weaponEnd
 	
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
@@ -96,8 +91,16 @@ private:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayDeathEffects();
+	
+	UPROPERTY(Replicated);
+	AFpsWeaponBase* CurrentWeapon;
+	
+	UFUNCTION(Server, Reliable)
+	void InitWeapon_OnServer();
 
 	/** Реплицированный поворот камеры */
 	UPROPERTY(Replicated)
 	FRotator ControlRotation_Rep;
+	UPROPERTY(Replicated)
+	FVector CameraLocation_Rep;
 };

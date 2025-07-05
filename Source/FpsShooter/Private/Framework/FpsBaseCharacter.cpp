@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/HealthComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 
 
@@ -45,7 +46,9 @@ void AFpsBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(AFpsBaseCharacter, ControlRotation_Rep, CurrentWeapon);
+	DOREPLIFETIME(AFpsBaseCharacter, CurrentWeapon);
+	DOREPLIFETIME(AFpsBaseCharacter, ControlRotation_Rep);
+	DOREPLIFETIME(AFpsBaseCharacter, CameraLocation_Rep);
 }
 
 void AFpsBaseCharacter::PostInitializeComponents()
@@ -65,15 +68,32 @@ void AFpsBaseCharacter::PostInitializeComponents()
 void AFpsBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (HasAuthority())
+	{
+		InitWeapon_OnServer();
+	}
 }
 
 void AFpsBaseCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	if (GetController() && (IsLocallyControlled() || HasAuthority()))
+	if (GetController() && (IsLocallyControlled() || HasAuthority()) && FirstPersonCameraComponent)
 	{
 		ControlRotation_Rep = GetController()->GetControlRotation();
+		CameraLocation_Rep = FirstPersonCameraComponent->GetComponentLocation();
+	}
+
+	if (!HealthComponent->IsAlive())
+	{
+		if (FirstPersonCameraComponent && ThirdPersonMesh)
+		{
+			FirstPersonCameraComponent->bUsePawnControlRotation = false;
+		
+			FirstPersonCameraComponent->SetWorldRotation(UKismetMathLibrary::FindLookAtRotation(
+				FirstPersonCameraComponent->GetComponentLocation(), ThirdPersonMesh->GetComponentLocation()));
+		}
 	}
 }
 
@@ -108,7 +128,7 @@ void AFpsBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	}
 }
 
-void AFpsBaseCharacter::OnRep_CurrentWeapon()
+void AFpsBaseCharacter::InitWeapon_OnServer_Implementation()
 {
 	const FTransform SpawnTransform = GetActorTransform();
 	CurrentWeapon = GetWorld()->SpawnActor<AFpsWeaponBase>(WeaponClass, SpawnTransform);
@@ -118,7 +138,6 @@ void AFpsBaseCharacter::OnRep_CurrentWeapon()
 		CurrentWeapon->AttachToComponent(GetOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 		CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
 	}
-
 }
 
 void AFpsBaseCharacter::Move(const FInputActionValue& Value)
@@ -217,6 +236,11 @@ void AFpsBaseCharacter::OnCharacterDied()
 	if (PC)
 	{
 		PC->SetCinematicMode(true, false, true, true, true);
+	}
+
+	if (FirstPersonCameraComponent && ThirdPersonMesh)
+	{
+		FirstPersonCameraComponent->bUsePawnControlRotation = false;
 	}
 }
 

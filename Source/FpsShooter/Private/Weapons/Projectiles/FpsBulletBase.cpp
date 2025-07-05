@@ -14,10 +14,12 @@ AFpsBulletBase::AFpsBulletBase()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
-
+	SetReplicatingMovement(true);
+	
 	// сфера в качестве простого представления столкновений
 	CollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionSphere"));
 	SetRootComponent(CollisionSphere);
+
 	CollisionSphere->InitSphereRadius(10.0f);
 	CollisionSphere->BodyInstance.SetCollisionProfileName("Projectile");
 	CollisionSphere->SetWalkableSlopeOverride(FWalkableSlopeOverride(WalkableSlope_Unwalkable, 0.f));

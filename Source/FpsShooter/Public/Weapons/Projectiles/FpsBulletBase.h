@@ -47,7 +47,7 @@ protected:
 		UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
 	UPROPERTY(Replicated)
-	float Damage = 1;
+	float Damage = 10;
 
 	UFUNCTION(NetMulticast, Reliable)
 	void PlayImpactEffects_Multicast(const FHitResult& Hit);
