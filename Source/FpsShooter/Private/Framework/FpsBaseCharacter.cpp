@@ -45,19 +45,21 @@ void AFpsBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	//DOREPLIFETIME(AFpsBaseCharacter, ControlRotation_Rep);
+	DOREPLIFETIME(AFpsBaseCharacter, ControlRotation_Rep, CurrentWeapon);
 }
 
 void AFpsBaseCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
-	OnTakeAnyDamage.AddDynamic(HealthComponent, &UHealthComponent::HandleAnyDamage);
-	OnTakePointDamage.AddDynamic(HealthComponent, &UHealthComponent::HandlePointDamage);
-	OnTakeRadialDamage.AddDynamic(HealthComponent, &UHealthComponent::HandleRadialDamage);
-
-	HealthComponent->OnDeath.BindUObject(this, &AFpsBaseCharacter::OnCharacterDied);
-	//HealthComponent->OnHealthChanged.AddDynamic(this, &AFpsBaseCharacter::OnHealthChanged);
+	if (HealthComponent)
+	{
+		OnTakeAnyDamage.AddDynamic(HealthComponent, &UHealthComponent::HandleAnyDamage);
+		OnTakePointDamage.AddDynamic(HealthComponent, &UHealthComponent::HandlePointDamage);
+		OnTakeRadialDamage.AddDynamic(HealthComponent, &UHealthComponent::HandleRadialDamage);
+		
+		HealthComponent->OnDeath.BindUObject(this, &AFpsBaseCharacter::OnCharacterDied);
+	}
 }
 
 void AFpsBaseCharacter::BeginPlay()
@@ -69,10 +71,10 @@ void AFpsBaseCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	//if (GetController() && (IsLocallyControlled() || HasAuthority()))
-	//{
-	//	ControlRotation_Rep = GetController()->GetControlRotation();
-	//}
+	if (GetController() && (IsLocallyControlled() || HasAuthority()))
+	{
+		ControlRotation_Rep = GetController()->GetControlRotation();
+	}
 }
 
 void AFpsBaseCharacter::NotifyControllerChanged()
@@ -104,6 +106,19 @@ void AFpsBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Started, this, &AFpsBaseCharacter::FireStart);
 		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Completed, this, &AFpsBaseCharacter::FireStop);
 	}
+}
+
+void AFpsBaseCharacter::OnRep_CurrentWeapon()
+{
+	const FTransform SpawnTransform = GetActorTransform();
+	CurrentWeapon = GetWorld()->SpawnActor<AFpsWeaponBase>(WeaponClass, SpawnTransform);
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->SetOwner(GetOwner());
+		CurrentWeapon->AttachToComponent(GetOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
+	}
+
 }
 
 void AFpsBaseCharacter::Move(const FInputActionValue& Value)

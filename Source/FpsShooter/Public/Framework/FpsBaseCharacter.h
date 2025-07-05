@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Weapons/FpsWeaponBase.h"
 #include "FpsBaseCharacter.generated.h"
 
 class UCameraComponent;
@@ -24,8 +25,8 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Получения реплицированного поворота контроллера (как пример) */
-	//UFUNCTION(BlueprintCallable, BlueprintPure)
-	//FORCEINLINE FRotator GetControlRotationRep() const { return ControlRotation_Rep; }
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	FORCEINLINE FRotator GetControlRotationRep() const { return ControlRotation_Rep; }
 	
 protected:
 	virtual void PostInitializeComponents() override;
@@ -40,14 +41,29 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* MoveAction;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* LookAction;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* JumpAction;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* CrouchAction;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* Fire;
+
+	//------weapon
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeaponSlot")
+	TSubclassOf<AFpsWeaponBase> WeaponClass;
+
+	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_CurrentWeapon);
+	AFpsWeaponBase* CurrentWeapon;
+
+	UFUNCTION()
+	void OnRep_CurrentWeapon();
+	//------weaponEnd
 	
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
@@ -65,9 +81,11 @@ private:
 	/** Компонент камеры */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
+	
 	/** Скелетный меш для рук (виден только себе) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* FirstPersonMesh;
+	
 	/** Скелетный меш для тела (виден другим игрокам) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ThirdPersonMesh;
@@ -80,6 +98,6 @@ private:
 	void Multicast_PlayDeathEffects();
 
 	/** Реплицированный поворот камеры */
-	//UPROPERTY(Replicated)
-	//FRotator ControlRotation_Rep;
+	UPROPERTY(Replicated)
+	FRotator ControlRotation_Rep;
 };
