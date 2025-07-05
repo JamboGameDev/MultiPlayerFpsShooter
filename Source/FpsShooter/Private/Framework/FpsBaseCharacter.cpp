@@ -136,7 +136,7 @@ void AFpsBaseCharacter::InitWeapon_OnServer_Implementation()
 	{
 		CurrentWeapon->SetOwner(GetOwner());
 		CurrentWeapon->AttachToComponent(GetOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-		CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
+		//CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
 	}
 }
 
