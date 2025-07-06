@@ -8,7 +8,8 @@
 #include "FpsWeaponBase.generated.h"
 
 
-UCLASS()
+// Абстрактный класс оружия, нельзя спавнить
+UCLASS(Abstract, Blueprintable)
 class FPSSHOOTER_API AFpsWeaponBase : public AActor
 {
 	GENERATED_BODY()
@@ -71,6 +72,8 @@ private:
 	float FireTimer = 0.0f;
 	float ReloadTime = 1.0f; // заполняем один раз вместо постоянного обращения к анимации
 	float RateOfFire = 1.0f; // время между выстрелами, рассчитываем один раз
+	FTimerHandle FireBurstTimerHandle; // Таймер для отработки стрельбы очередью
+	int32 CurrentBurstShotIndex = 0; // Счётчик пуль в очереди
 	FTimerHandle ReloadTimerHandle; // Таймер заводим при начале перезарядки и по его окончанию заканчиваем перезарядку
 
 	// Рабочие функции для работы оружия
@@ -89,6 +92,6 @@ private:
 
 	// Сетевые функции
 	UFUNCTION()
-	void OnRep_CurrentAmmo();
+	void OnRep_CurrentAmmo() const;
 	
 };

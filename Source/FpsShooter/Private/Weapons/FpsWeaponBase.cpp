@@ -11,13 +11,16 @@ AFpsWeaponBase::AFpsWeaponBase()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 
+	// Заполняем компоненты оружия
 }
 
 void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp,
 	USkeletalMeshComponent* ThirdMeshComp)
 {
-	if (!FirstMeshComp || !ThirdMeshComp) return;
-	if (!FirstPersonWeaponMesh || !ThirdPersonWeaponMesh) return;
+	// макрос, который предоставляет улучшенную проверку условий
+	// с детализированным логированием при ошибках.
+	if (!ensure(FirstMeshComp && ThirdMeshComp)) return;
+	if (!ensure(FirstPersonWeaponMesh && ThirdPersonWeaponMesh)) return;
 
 	// Сохраняем указатели на компоненты игрока
 	FirstPersonCharacterMesh = FirstMeshComp;
@@ -43,6 +46,7 @@ void AFpsWeaponBase::BeginPlay()
 	// Заполняем рабочие переменные дефолтными значениями
 	RateOfFire = FMath::Max(0.001f, 60.f / WeaponData.BulletsPerMinute);
 	CurrentAmmo = WeaponData.MaxAmmoInClip;
+	
 	if (WeaponReloadAnimation)
 	{
 		ReloadTime = WeaponReloadAnimation->GetPlayLength();
@@ -62,7 +66,7 @@ void AFpsWeaponBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(AFpsWeaponBase, bIsFiring);
+	DOREPLIFETIME_CONDITION(AFpsWeaponBase, bIsFiring, COND_SkipOwner);
 	DOREPLIFETIME(AFpsWeaponBase, bIsBurstFiring);
 	DOREPLIFETIME_CONDITION(AFpsWeaponBase, bIsReloading, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(AFpsWeaponBase, CurrentAmmo, COND_OwnerOnly);
@@ -129,7 +133,7 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 	}
 }
 
-void AFpsWeaponBase::OnRep_CurrentAmmo()
+void AFpsWeaponBase::OnRep_CurrentAmmo() const
 {
 	// Патроны изменились, например вызов делегата на клиенте
 }
