@@ -209,6 +209,7 @@ void AFpsBaseCharacter::UpdateMeshVisibility(const bool bAlive)
 void AFpsBaseCharacter::FireStart()
 {
 	if (CurrentWeapon) CurrentWeapon->ChangeFireStatus(true);
+	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Button"));
 }
 
 void AFpsBaseCharacter::FireStop()
