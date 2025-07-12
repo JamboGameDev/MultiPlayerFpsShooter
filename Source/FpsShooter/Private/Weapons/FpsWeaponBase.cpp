@@ -3,6 +3,9 @@
 
 #include "Weapons/FpsWeaponBase.h"
 
+#include "Framework/FpsBaseCharacter.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 
 
@@ -11,11 +14,26 @@ AFpsWeaponBase::AFpsWeaponBase()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 
-	// Заполняем компоненты оружия
+	SceneRoot = CreateDefaultSubobject<USceneComponent>("SceneRoot");
+
+	FirstPersonWeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FirstPersonWeaponMesh"));
+	FirstPersonWeaponMesh->SetupAttachment(SceneRoot);
+	
+	ThirdPersonWeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ThirdPersonWeaponMesh"));
+	ThirdPersonWeaponMesh->SetupAttachment(SceneRoot);
+
+}
+
+void AFpsWeaponBase::ChangeFireStatus(const bool bNewFireStatus)
+{
+		if (HasAuthority())
+		{
+			ChangeFireStatus_OnServer(bNewFireStatus);
+		}
 }
 
 void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp,
-	USkeletalMeshComponent* ThirdMeshComp)
+                                        USkeletalMeshComponent* ThirdMeshComp)
 {
 	// макрос, который предоставляет улучшенную проверку условий
 	// с детализированным логированием при ошибках.
@@ -32,6 +50,7 @@ void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp,
 	// Проиграть анимацию экипирования для персонажа
 	if (FirstPersonEquipAnimation && FirstPersonCharacterMesh && FirstPersonCharacterMesh->GetAnimInstance())
 		FirstPersonCharacterMesh->GetAnimInstance()->Montage_Play(FirstPersonEquipAnimation);
+	
 	if (ThirdPersonEquipAnimation && ThirdPersonCharacterMesh && ThirdPersonCharacterMesh->GetAnimInstance())
 		ThirdPersonCharacterMesh->GetAnimInstance()->Montage_Play(ThirdPersonEquipAnimation);
 
@@ -120,7 +139,7 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 				//StartBurstFire();
 				break;
 			case EWeaponFireMode::Auto:
-				//Fire_OnServer();
+				Fire_OnServer();
 				break;
 			}
         
@@ -133,7 +152,107 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 	}
 }
 
+bool AFpsWeaponBase::IsOwnerLocalPlayer() const
+{
+	{
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		return OwnerPawn && OwnerPawn->IsLocallyControlled();
+	} 
+}
+
 void AFpsWeaponBase::OnRep_CurrentAmmo() const
 {
 	// Патроны изменились, например вызов делегата на клиенте
+}
+
+void AFpsWeaponBase::Fire_OnServer_Implementation()
+{
+	if (!ensure(GetOwner() != nullptr)) return;
+	const auto OwnerPlayer = Cast<AFpsBaseCharacter>(GetOwner());
+	const auto OwningController = Cast<APlayerController>(OwnerPlayer->GetController());
+	if (!OwnerPlayer || !OwningController) return;
+
+	const FVector FireStartPoint = OwnerPlayer->GetCameraLocation();
+	const FVector FireForwardVector = UKismetMathLibrary::GetForwardVector(OwnerPlayer->GetControlRotation_Rep());
+	const FRotator BaseRotation = UKismetMathLibrary::MakeRotFromX(FireForwardVector); //Посчитать разброс BaseRotation
+
+	UWorld* World = GetWorld();
+	
+	FHitResult Hit;
+	const FVector TraceEnd = FireStartPoint + BaseRotation.Vector() * 10000.f;
+
+	World->LineTraceSingleByChannel(
+		Hit,
+		FireStartPoint,
+		TraceEnd,
+		ECC_GameTraceChannel2, // Используем ваш канал
+		FCollisionQueryParams(SCENE_QUERY_STAT(WeaponTrace), true, OwnerPlayer)
+	);
+	
+
+	if (Hit.bBlockingHit)
+	{
+		Multicast_PlayHitEffects(Hit);
+
+		if (Hit.GetComponent() && Hit.GetComponent()->IsSimulatingPhysics())
+		{
+			Hit.GetComponent()->AddImpulseAtLocation(
+				BaseRotation.Vector() * 1000000.f,
+				Hit.Location,
+				Hit.BoneName
+			);
+		}
+		else
+		{
+			UGameplayStatics::ApplyPointDamage(
+				Hit.GetActor(),
+				WeaponData.Damage,
+				BaseRotation.Vector(),
+				Hit,
+				OwningController,
+				this,
+				nullptr
+			);
+		}
+	}
+
+	// Визуализация трейса
+	if (World)
+	{
+		// Цвет линии, если есть попадание
+		FColor LineColor = Hit.bBlockingHit ? FColor::Red : FColor::Green;
+
+		// Рисуем линию трейса
+		DrawDebugLine(
+			World,
+			FireStartPoint,
+			Hit.bBlockingHit ? Hit.ImpactPoint : TraceEnd, // Конечная точка зависит от наличия попадания
+			LineColor,
+			false, // PersistentLines: если true, линия будет отображаться постоянно
+			5.0f,  // Duration: время отображения линии (в секундах)
+			0,     // DepthPriority
+			5.0f   // Thickness: толщина линии
+		);
+	}
+
+	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("FireTick"));
+}
+
+void AFpsWeaponBase::ChangeFireStatus_OnServer_Implementation(const bool bNewFireStatus)
+{
+	bIsFiring = bNewFireStatus;
+}
+
+void AFpsWeaponBase::Multicast_PlayHitEffects_Implementation(const FHitResult& Hit)
+{
+	if (IsOwnerLocalPlayer())
+	{
+		// Спецэффекты для первого лица (например, следы от пуль вблизи)
+	}
+	else
+	{
+		// Вызов Blueprint-ивента
+		// Стандартные эффекты для третьего лица
+		//HitEffects_BP(HitResult);
+	}
 }

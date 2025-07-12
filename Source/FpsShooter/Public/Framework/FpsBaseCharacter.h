@@ -27,6 +27,7 @@ public:
 	/** Получения реплицированного поворота контроллера (как пример) */
     UFUNCTION(BlueprintPure, BlueprintCallable)
     FORCEINLINE FRotator GetControlRotation_Rep() const { return ControlRotation_Rep;}
+	
 	UFUNCTION(BlueprintPure, BlueprintCallable)
 	FORCEINLINE FVector GetCameraLocation() const { return CameraLocation_Rep;}
 	
@@ -98,9 +99,12 @@ private:
 	UFUNCTION(Server, Reliable)
 	void InitWeapon_OnServer();
 
+	void SpawnMuzzle();
+
 	/** Реплицированный поворот камеры */
 	UPROPERTY(Replicated)
 	FRotator ControlRotation_Rep;
+	
 	UPROPERTY(Replicated)
 	FVector CameraLocation_Rep;
 };

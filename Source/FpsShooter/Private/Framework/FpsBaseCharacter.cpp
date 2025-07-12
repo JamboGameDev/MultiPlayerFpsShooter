@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/HealthComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 
@@ -130,13 +131,15 @@ void AFpsBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 void AFpsBaseCharacter::InitWeapon_OnServer_Implementation()
 {
+	if (!ensure(WeaponClass)) return;
+	
 	const FTransform SpawnTransform = GetActorTransform();
 	CurrentWeapon = GetWorld()->SpawnActor<AFpsWeaponBase>(WeaponClass, SpawnTransform);
 	if (CurrentWeapon)
 	{
-		CurrentWeapon->SetOwner(GetOwner());
-		CurrentWeapon->AttachToComponent(GetOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-		//CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
+		CurrentWeapon->SetOwner(this);
+		CurrentWeapon->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
 	}
 }
 
@@ -205,18 +208,12 @@ void AFpsBaseCharacter::UpdateMeshVisibility(const bool bAlive)
 
 void AFpsBaseCharacter::FireStart()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(0, 2.f, FColor::Red, "Fire Start");
-	}
+	if (CurrentWeapon) CurrentWeapon->ChangeFireStatus(true);
 }
 
 void AFpsBaseCharacter::FireStop()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(1, 2.f, FColor::Green, "Fire Stop");
-	}
+	if (CurrentWeapon) CurrentWeapon->ChangeFireStatus(false);
 }
 
 void AFpsBaseCharacter::OnCharacterDied()
@@ -242,6 +239,11 @@ void AFpsBaseCharacter::OnCharacterDied()
 	{
 		FirstPersonCameraComponent->bUsePawnControlRotation = false;
 	}
+}
+
+void AFpsBaseCharacter::SpawnMuzzle()
+{
+	
 }
 
 void AFpsBaseCharacter::Multicast_PlayDeathEffects_Implementation()

@@ -68,6 +68,7 @@ struct FWeaponData : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
 	bool bIsShotgun = false;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings",
 		meta = (
 			EditCondition = "bIsShotgun",
@@ -87,10 +88,13 @@ struct FWeaponData : public FTableRowBase
 		UIMax = 127
 	))
 	int32 MaxAmmoInClip = 30;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
 	float BulletsPerMinute = 600.0f;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings")
 	float Damage = 10.0f;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings",
 		meta = (
 			ClampMin = "0.1",   // Минимальный разброс
@@ -101,9 +105,11 @@ struct FWeaponData : public FTableRowBase
 	float SpreadAngle = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Additional")
-	FName AttachmentSocketName = "RightHand";
+	FName AttachmentSocketName = "weapon_rSocket";
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Additional")
 	FName MuzzleSocketName = "muzzle_joint";
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Additional")
 	FVector MuzzleOffset = FVector(0.0f, 0.0f, 0.0f);
 	

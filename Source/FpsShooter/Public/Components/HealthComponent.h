@@ -53,8 +53,10 @@ public:
 	// Функции обёртки для подвязки на делегаты
 	UFUNCTION()
 	void HandleAnyDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser );
+	
 	UFUNCTION()
 	void HandlePointDamage(AActor* DamagedActor, float Damage, class AController* InstigatedBy, FVector HitLocation, class UPrimitiveComponent* FHitComponent, FName BoneName, FVector ShotFromDirection, const class UDamageType* DamageType, AActor* DamageCauser );
+	
 	UFUNCTION()
 	void HandleRadialDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, FVector Origin, const FHitResult& HitInfo, class AController* InstigatedBy, AActor* DamageCauser );
 	
@@ -84,6 +86,7 @@ private:
 	// Чисто серверная логика урона с валидацией
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_TakeDamage(const float Damage);
+	
 	// Чисто серверная логика лечения
 	UFUNCTION(Server, Reliable)
 	void Server_Heal(const float HealAmount);

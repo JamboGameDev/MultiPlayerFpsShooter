@@ -7,6 +7,7 @@
 #include "GameFramework/Actor.h"
 #include "FpsWeaponBase.generated.h"
 
+class USkeletalMeshComponent;
 
 // Абстрактный класс оружия, нельзя спавнить
 UCLASS(Abstract, Blueprintable)
@@ -16,31 +17,39 @@ class FPSSHOOTER_API AFpsWeaponBase : public AActor
 	
 public:	
 	AFpsWeaponBase();
+
+	void ChangeFireStatus(const bool bNewFireStatus);
 	
 	UFUNCTION()
 	void AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp, USkeletalMeshComponent* ThirdMeshComp);
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | Base")
 	FName CurrentWeaponID = "Default";
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | Base")
 	UDataTable* WeaponDataTable;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | WeaponAnimation")
 	UAnimMontage* WeaponFireAnimation;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | WeaponAnimation")
 	UAnimMontage* WeaponReloadAnimation;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | FirstPersonAnimation")
 	UAnimMontage* FirstPersonEquipAnimation;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | FirstPersonAnimation")
 	UAnimMontage* FirstPersonFireAnimation;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | FirstPersonAnimation")
 	UAnimMontage* FirstPersonReloadAnimation;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | ThirdPersonAnimation")
 	UAnimMontage* ThirdPersonEquipAnimation;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | ThirdPersonAnimation")
 	UAnimMontage* ThirdPersonFireAnimation;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | ThirdPersonAnimation")
 	UAnimMontage* ThirdPersonReloadAnimation;
 	
@@ -49,12 +58,16 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	
+
 private:
 	// Компоненты нашего оружия
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USceneComponent* SceneRoot;
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* FirstPersonWeaponMesh;
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ThirdPersonWeaponMesh;
 
@@ -62,6 +75,7 @@ private:
 	// Нужны для вызова анимаций персонажа
 	UPROPERTY()
 	USkeletalMeshComponent* FirstPersonCharacterMesh;
+	
 	UPROPERTY()
 	USkeletalMeshComponent* ThirdPersonCharacterMesh;
 
@@ -80,18 +94,31 @@ private:
 	bool GetWeaponDataByID(const FName WeaponID, FWeaponData& OutWeaponData) const;
 	void FireTick(const float DeltaTime);
 
+	bool IsOwnerLocalPlayer() const;
+
 	// Реплицируемые переменные (состояния оружия)
 	UPROPERTY(Replicated)
 	bool bIsFiring = false; // Начав стрельбу включаем булевую, закончив выключаем
+	
 	UPROPERTY(Replicated)
 	bool bIsBurstFiring = false; // Очередь в процессе
+	
 	UPROPERTY(Replicated)
 	bool bIsReloading = false; // Оружие на перезарядке
+	
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentAmmo)
 	int8 CurrentAmmo;
 
 	// Сетевые функции
 	UFUNCTION()
 	void OnRep_CurrentAmmo() const;
-	
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayHitEffects(const FHitResult& Hit);
+
+	UFUNCTION(Server, Reliable)
+	void ChangeFireStatus_OnServer(const bool bNewFireStatus);
+
+	UFUNCTION(Server, Reliable)
+	void Fire_OnServer();
 };
