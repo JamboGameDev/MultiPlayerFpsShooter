@@ -52,6 +52,12 @@ public:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Settings | ThirdPersonAnimation")
 	UAnimMontage* ThirdPersonReloadAnimation;
+
+	UFUNCTION(Server, Reliable)
+	void ServerReloadRequest();
+
+	UPROPERTY(Replicated)
+	bool bIsReloading = false; // Оружие на перезарядке
 	
 protected:
 	virtual void BeginPlay() override;
@@ -61,7 +67,6 @@ protected:
 	
 
 private:
-	// Компоненты нашего оружия
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USceneComponent* SceneRoot;
 	
@@ -71,43 +76,41 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ThirdPersonWeaponMesh;
 
-	// Указатели на модельки персонажа от 1 и 3 лица
-	// Нужны для вызова анимаций персонажа
+	
 	UPROPERTY()
 	USkeletalMeshComponent* FirstPersonCharacterMesh;
 	
 	UPROPERTY()
 	USkeletalMeshComponent* ThirdPersonCharacterMesh;
 
-	// Загруженные из таблицы дефолтные настройки оружия
+	
 	FWeaponData WeaponData;
 
 	// Рабочие переменные для работы оружия
 	float FireTimer = 0.0f;
-	float ReloadTime = 1.0f; // заполняем один раз вместо постоянного обращения к анимации
-	float RateOfFire = 1.0f; // время между выстрелами, рассчитываем один раз
-	FTimerHandle FireBurstTimerHandle; // Таймер для отработки стрельбы очередью
-	int32 CurrentBurstShotIndex = 0; // Счётчик пуль в очереди
-	FTimerHandle ReloadTimerHandle; // Таймер заводим при начале перезарядки и по его окончанию заканчиваем перезарядку
+	float ReloadTime = 2.0f;
+	float RateOfFire = 1.0f;
+	FTimerHandle FireBurstTimerHandle; 
+	int32 CurrentBurstShotIndex = 0; 
+	FTimerHandle ReloadTimerHandle; 
 
 	// Рабочие функции для работы оружия
 	bool GetWeaponDataByID(const FName WeaponID, FWeaponData& OutWeaponData) const;
 	void FireTick(const float DeltaTime);
+	void ResetAmmo();
+	void FinishReloading();
 
 	bool IsOwnerLocalPlayer() const;
 
 	// Реплицируемые переменные (состояния оружия)
 	UPROPERTY(Replicated)
-	bool bIsFiring = false; // Начав стрельбу включаем булевую, закончив выключаем
+	bool bIsFiring = false;
 	
 	UPROPERTY(Replicated)
-	bool bIsBurstFiring = false; // Очередь в процессе
-	
-	UPROPERTY(Replicated)
-	bool bIsReloading = false; // Оружие на перезарядке
+	bool bIsBurstFiring = false; 
 	
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentAmmo)
-	int8 CurrentAmmo;
+	int32 CurrentAmmo;
 
 	// Сетевые функции
 	UFUNCTION()
@@ -121,4 +124,10 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void Fire_OnServer();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayFireAnimation();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayMontageReload();
 };

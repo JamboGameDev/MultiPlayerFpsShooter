@@ -57,6 +57,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
 	UInputAction* Fire;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Settings | Input")
+	UInputAction* ReloadAction;
+
 	//------weapon
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WeaponSlot")
 	TSubclassOf<AFpsWeaponBase> WeaponClass;
@@ -69,6 +72,7 @@ protected:
 	void UpdateMeshVisibility(const bool bAlive);
 	void FireStart();
 	void FireStop();
+	void ReloadWeapon();
 	
 	UFUNCTION(meta = (ToolTip = "Реакция на смерть"))
 	void OnCharacterDied();

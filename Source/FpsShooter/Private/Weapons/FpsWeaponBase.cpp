@@ -26,10 +26,10 @@ AFpsWeaponBase::AFpsWeaponBase()
 
 void AFpsWeaponBase::ChangeFireStatus(const bool bNewFireStatus)
 {
-		if (HasAuthority())
-		{
-			ChangeFireStatus_OnServer(bNewFireStatus);
-		}
+	if (HasAuthority())
+	{
+		ChangeFireStatus_OnServer(bNewFireStatus);
+	}
 }
 
 void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp,
@@ -61,15 +61,9 @@ void AFpsWeaponBase::BeginPlay()
 	Super::BeginPlay();
 
 	GetWeaponDataByID(CurrentWeaponID, WeaponData);
-
-	// Заполняем рабочие переменные дефолтными значениями
+	
 	RateOfFire = FMath::Max(0.001f, 60.f / WeaponData.BulletsPerMinute);
 	CurrentAmmo = WeaponData.MaxAmmoInClip;
-	
-	if (WeaponReloadAnimation)
-	{
-		ReloadTime = WeaponReloadAnimation->GetPlayLength();
-	}
 }
 
 void AFpsWeaponBase::Tick(float DeltaTime)
@@ -79,6 +73,7 @@ void AFpsWeaponBase::Tick(float DeltaTime)
 	// Вместо таймеров будем использовать тик на сервере
 	if (HasAuthority())
 		FireTick(DeltaTime);
+	
 }
 
 void AFpsWeaponBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -120,11 +115,12 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 		// Общая проверка таймера для всех режимов
 		if (FireTimer <= 0.0f)
 		{
+			
 			// Проверка боеприпасов
 			if (CurrentAmmo <= 0)
 			{
 				bIsFiring = false;
-				//ReloadRequest();
+				ServerReloadRequest();
 				return;
 			}
 
@@ -140,6 +136,7 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 				break;
 			case EWeaponFireMode::Auto:
 				Fire_OnServer();
+				CurrentAmmo--;
 				break;
 			}
         
@@ -150,6 +147,17 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 			FireTimer -= DeltaTime;
 		}
 	}
+}
+
+void AFpsWeaponBase::ResetAmmo()
+{
+	CurrentAmmo = WeaponData.MaxAmmoInClip;
+}
+
+void AFpsWeaponBase::FinishReloading()
+{
+	bIsReloading = false;
+	ResetAmmo();
 }
 
 bool AFpsWeaponBase::IsOwnerLocalPlayer() const
@@ -165,9 +173,58 @@ void AFpsWeaponBase::OnRep_CurrentAmmo() const
 	// Патроны изменились, например вызов делегата на клиенте
 }
 
+void AFpsWeaponBase::Multicast_PlayMontageReload_Implementation()
+{
+	if (FirstPersonCharacterMesh && FirstPersonCharacterMesh->GetAnimInstance() && FirstPersonFireAnimation)
+	{
+		FirstPersonCharacterMesh->GetAnimInstance()->Montage_Play(FirstPersonReloadAnimation);
+	}
+}
+
+void AFpsWeaponBase::ServerReloadRequest_Implementation()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Server: ServerReloadRequest_Implementation called"));
+	if (bIsReloading) return;
+	
+	bIsReloading = true;
+	UE_LOG(LogTemp, Warning, TEXT("Server: Reload started"));
+	Multicast_PlayMontageReload();
+	
+	if (WeaponReloadAnimation)
+	{
+		ReloadTime = WeaponReloadAnimation->GetPlayLength();
+	}
+	
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AFpsWeaponBase::FinishReloading, ReloadTime, false);
+}
+
+void AFpsWeaponBase::Multicast_PlayFireAnimation_Implementation()
+{
+	if (IsOwnerLocalPlayer())
+	{
+		if (FirstPersonCharacterMesh && FirstPersonCharacterMesh->GetAnimInstance() && FirstPersonFireAnimation)
+		{
+			FirstPersonCharacterMesh->GetAnimInstance()->Montage_Play(FirstPersonFireAnimation);
+		}
+		
+		if (FirstPersonWeaponMesh && FirstPersonWeaponMesh->GetAnimInstance() && WeaponFireAnimation)
+		{
+			FirstPersonWeaponMesh->GetAnimInstance()->Montage_Play(WeaponFireAnimation);
+		}
+	}
+	else
+	{
+		if (ThirdPersonCharacterMesh && ThirdPersonCharacterMesh->GetAnimInstance() && ThirdPersonFireAnimation)
+		{
+			ThirdPersonCharacterMesh->GetAnimInstance()->Montage_Play(ThirdPersonFireAnimation);
+		}
+	}
+}
+
 void AFpsWeaponBase::Fire_OnServer_Implementation()
 {
 	if (!ensure(GetOwner() != nullptr)) return;
+	
 	const auto OwnerPlayer = Cast<AFpsBaseCharacter>(GetOwner());
 	const auto OwningController = Cast<APlayerController>(OwnerPlayer->GetController());
 	if (!OwnerPlayer || !OwningController) return;
@@ -216,6 +273,8 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 		}
 	}
 
+	Multicast_PlayFireAnimation_Implementation();
+
 	// Визуализация трейса
 	if (World)
 	{
@@ -231,7 +290,7 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 			false, // PersistentLines: если true, линия будет отображаться постоянно
 			5.0f,  // Duration: время отображения линии (в секундах)
 			0,     // DepthPriority
-			5.0f   // Thickness: толщина линии
+			1.0f   // Thickness: толщина линии
 		);
 	}
 

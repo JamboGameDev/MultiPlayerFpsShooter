@@ -5,9 +5,6 @@
 #include "CoreMinimal.h"
 #include "WeaponData.generated.h"
 
-
-// ====== Мои структуры ======
-
 class AFpsBulletBase;
 class AFpsWeaponBase;
 
@@ -48,10 +45,10 @@ struct FWeaponData : public FTableRowBase
 	meta = (
 		EditCondition = "FireMode == EWeaponFireMode::Burst",
 		EditConditionHides,
-		ClampMin = 1,      // Минимум 1 выстрел
-		UIMin = 1,          // Минимальное значение в слайдере
-		ClampMax = 10,      // Максимум 10 выстрелов
-		UIMax = 10          // Максимальное значение в слайдере
+		ClampMin = 1,     
+		UIMin = 1,          
+		ClampMax = 10,      
+		UIMax = 10          
 	))
 	int32 BurstShotsCount = 3;
 
@@ -59,9 +56,9 @@ struct FWeaponData : public FTableRowBase
 		meta = (
 			EditCondition = "FireMode == EWeaponFireMode::Burst",
 			EditConditionHides,
-			ClampMin = "0.01",  // Минимум 0.01 сек
+			ClampMin = "0.01",  
 			UIMin = "0.01",     
-			ClampMax = "1.0",   // Максимум 1 сек
+			ClampMax = "1.0", 
 			UIMax = "1.0"
 		))
 	float BurstDelay = 0.05f;
@@ -73,16 +70,16 @@ struct FWeaponData : public FTableRowBase
 		meta = (
 			EditCondition = "bIsShotgun",
 			EditConditionHides,
-			ClampMin = 1,       // Хотя бы 1 дробь
+			ClampMin = 1,       
 			UIMin = 1,
-			ClampMax = 20,       // Максимум 20 дробин
+			ClampMax = 20,       
 			UIMax = 20
 		))
 	int32 BulletsOnShoot = 8;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings",
 	meta = (
-		ClampMin = 1,   // Минимальный разброс
+		ClampMin = 1,   
 		UIMin = 1,
 		ClampMax = 127,   // Максимальный разброс (градусы)
 		UIMax = 127
@@ -97,7 +94,7 @@ struct FWeaponData : public FTableRowBase
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Settings",
 		meta = (
-			ClampMin = "0.1",   // Минимальный разброс
+			ClampMin = "0.1",   
 			UIMin = "0.1",
 			ClampMax = "10.0",   // Максимальный разброс (градусы)
 			UIMax = "10.0"
