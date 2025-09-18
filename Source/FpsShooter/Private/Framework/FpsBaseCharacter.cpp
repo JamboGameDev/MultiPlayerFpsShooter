@@ -2,17 +2,20 @@
 
 
 #include "Framework/FpsBaseCharacter.h"
-
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/HealthComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 
-// Sets default values
+
 AFpsBaseCharacter::AFpsBaseCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 
 	// Создаем компонент камеры
@@ -36,18 +39,63 @@ AFpsBaseCharacter::AFpsBaseCharacter()
 	ThirdPersonMesh->SetupAttachment(GetRootComponent());
 	ThirdPersonMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
 	ThirdPersonMesh->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
-
+	
+	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 }
 
 void AFpsBaseCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME(AFpsBaseCharacter, CurrentWeapon);
+	DOREPLIFETIME(AFpsBaseCharacter, ControlRotation_Rep);
+	DOREPLIFETIME(AFpsBaseCharacter, CameraLocation_Rep);
+}
+
+void AFpsBaseCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+
+	if (HealthComponent)
+	{
+		OnTakeAnyDamage.AddDynamic(HealthComponent, &UHealthComponent::HandleAnyDamage);
+		OnTakePointDamage.AddDynamic(HealthComponent, &UHealthComponent::HandlePointDamage);
+		OnTakeRadialDamage.AddDynamic(HealthComponent, &UHealthComponent::HandleRadialDamage);
+		
+		HealthComponent->OnDeath.BindUObject(this, &AFpsBaseCharacter::OnCharacterDied);
+	}
 }
 
 void AFpsBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (HasAuthority())
+	{
+		InitWeapon_OnServer();
+	}
+}
+
+void AFpsBaseCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (GetController() && (IsLocallyControlled() || HasAuthority()) && FirstPersonCameraComponent)
+	{
+		ControlRotation_Rep = GetController()->GetControlRotation();
+		CameraLocation_Rep = FirstPersonCameraComponent->GetComponentLocation();
+	}
+
+	if (!HealthComponent->IsAlive())
+	{
+		if (FirstPersonCameraComponent && ThirdPersonMesh)
+		{
+			FirstPersonCameraComponent->bUsePawnControlRotation = false;
+		
+			FirstPersonCameraComponent->SetWorldRotation(UKismetMathLibrary::FindLookAtRotation(
+				FirstPersonCameraComponent->GetComponentLocation(), ThirdPersonMesh->GetComponentLocation()));
+		}
+	}
 }
 
 void AFpsBaseCharacter::NotifyControllerChanged()
@@ -76,13 +124,29 @@ void AFpsBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::StartJump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AFpsBaseCharacter::StopJump);
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::ToggleCrouch);
+		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::FireStart);
+		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Completed, this, &AFpsBaseCharacter::FireStop);
+		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Completed, this, &AFpsBaseCharacter::ReloadWeapon);
 	}
+}
 
+void AFpsBaseCharacter::InitWeapon_OnServer_Implementation()
+{
+	if (!ensure(WeaponClass)) return;
+	
+	const FTransform SpawnTransform = GetActorTransform();
+	CurrentWeapon = GetWorld()->SpawnActor<AFpsWeaponBase>(WeaponClass, SpawnTransform);
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->SetOwner(this);
+		CurrentWeapon->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		CurrentWeapon->AttachWeaponMeshes(FirstPersonMesh, ThirdPersonMesh);
+	}
 }
 
 void AFpsBaseCharacter::Move(const FInputActionValue& Value)
 {
-	FVector2D MovementVector = Value.Get<FVector2D>();
+	const FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
@@ -93,7 +157,7 @@ void AFpsBaseCharacter::Move(const FInputActionValue& Value)
 
 void AFpsBaseCharacter::Look(const FInputActionValue& Value)
 {
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
+	const FVector2D LookAxisVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
@@ -124,19 +188,84 @@ void AFpsBaseCharacter::ToggleCrouch()
 	}
 }
 
-void AFpsBaseCharacter::UpdateMeshVisibility()
+void AFpsBaseCharacter::UpdateMeshVisibility(const bool bAlive)
 {
 	if (IsLocallyControlled())
 	{
 		// Для локального игрока показываем только руки
-		FirstPersonMesh->SetVisibility(true, true);
-		ThirdPersonMesh->SetVisibility(false, true);
+		FirstPersonMesh->SetOnlyOwnerSee(bAlive);
+		FirstPersonMesh->SetVisibility(bAlive);
+	
+		ThirdPersonMesh->SetOwnerNoSee(bAlive);
+		ThirdPersonMesh->SetVisibility(!bAlive);
 	}
 	else
 	{
 		// Для других игроков показываем только тело
-		FirstPersonMesh->SetVisibility(false, true);
-		ThirdPersonMesh->SetVisibility(true, true);
+		FirstPersonMesh->SetVisibility(false);
+		ThirdPersonMesh->SetVisibility(true);
 	}
 }
 
+void AFpsBaseCharacter::FireStart()
+{
+	if(!CurrentWeapon) return; 
+	if (CurrentWeapon) CurrentWeapon->ChangeFireStatus(true);
+	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Button"));
+}
+
+void AFpsBaseCharacter::FireStop()
+{
+	if (CurrentWeapon) CurrentWeapon->ChangeFireStatus(false);
+}
+
+void AFpsBaseCharacter::ReloadWeapon()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Client: ReloadWeapon called — sending ServerReloadRequest RPC"));
+	if (CurrentWeapon) CurrentWeapon->ServerReloadRequest();
+}
+
+void AFpsBaseCharacter::OnCharacterDied()
+{
+	// Останавливаем движение
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->DisableMovement();
+
+	// Multicast Может вызывать только сервер
+	if (GetLocalRole() == ROLE_Authority)
+	{
+		Multicast_PlayDeathEffects();
+	}
+	
+	// Выключаем контроллер
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC)
+	{
+		PC->SetCinematicMode(true, false, true, true, true);
+	}
+
+	if (FirstPersonCameraComponent && ThirdPersonMesh)
+	{
+		FirstPersonCameraComponent->bUsePawnControlRotation = false;
+	}
+}
+
+void AFpsBaseCharacter::SpawnMuzzle()
+{
+	
+}
+
+void AFpsBaseCharacter::Multicast_PlayDeathEffects_Implementation()
+{
+	UpdateMeshVisibility(false);
+	
+	GetMesh()->SetSimulatePhysics(true);
+	GetMesh()->SetAllBodiesSimulatePhysics(true);
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
+
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
+
+	// Можно проиграть анимацию смерти, звук, камеру и т.д.
+	//UGameplayStatics::PlaySoundAtLocation(this, DeathSound, GetActorLocation());
+}
