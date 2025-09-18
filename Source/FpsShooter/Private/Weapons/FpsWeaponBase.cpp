@@ -7,6 +7,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
+#include "Weapons/Projectiles/FpsBulletBase.h"
 
 
 AFpsWeaponBase::AFpsWeaponBase()
@@ -26,14 +27,14 @@ AFpsWeaponBase::AFpsWeaponBase()
 
 void AFpsWeaponBase::ChangeFireStatus(const bool bNewFireStatus)
 {
-	if (HasAuthority())
+	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy) // ROLE_AutonomousProxy это ты, остальные SimulatedProxy.
 	{
 		ChangeFireStatus_OnServer(bNewFireStatus);
 	}
+	
 }
 
-void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp,
-                                        USkeletalMeshComponent* ThirdMeshComp)
+void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp, USkeletalMeshComponent* ThirdMeshComp)
 {
 	// макрос, который предоставляет улучшенную проверку условий
 	// с детализированным логированием при ошибках.
@@ -53,17 +54,24 @@ void AFpsWeaponBase::AttachWeaponMeshes(USkeletalMeshComponent* FirstMeshComp,
 	
 	if (ThirdPersonEquipAnimation && ThirdPersonCharacterMesh && ThirdPersonCharacterMesh->GetAnimInstance())
 		ThirdPersonCharacterMesh->GetAnimInstance()->Montage_Play(ThirdPersonEquipAnimation);
-
 }
 
 void AFpsWeaponBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	IniRecoilPattern();
+	
 	GetWeaponDataByID(CurrentWeaponID, WeaponData);
 	
 	RateOfFire = FMath::Max(0.001f, 60.f / WeaponData.BulletsPerMinute);
 	CurrentAmmo = WeaponData.MaxAmmoInClip;
+
+	if (WeaponReloadAnimation)
+	{
+		ReloadTime = WeaponReloadAnimation->GetPlayLength();
+	}
+	
 }
 
 void AFpsWeaponBase::Tick(float DeltaTime)
@@ -84,6 +92,47 @@ void AFpsWeaponBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AFpsWeaponBase, bIsBurstFiring);
 	DOREPLIFETIME_CONDITION(AFpsWeaponBase, bIsReloading, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(AFpsWeaponBase, CurrentAmmo, COND_OwnerOnly);
+}
+
+void AFpsWeaponBase::ResetRecoil()
+{
+	ShotsFired = 0;
+}
+
+void AFpsWeaponBase::IniRecoilPattern()
+{
+	RecoilPattern = {
+	{0.f, 0.f},
+	{0.f, 0.5f},
+	{0.2f, 0.6f},
+	{-0.2f, 0.3f},
+	{0.3f, 0.5f},
+	{-0.3f, 0.5f},
+	{0.4f, 0.1f},
+	{-0.4f, 0.2f},
+	{0.3f, 0.3f},
+	{-0.5f, 0.4f},
+	{0.3f, 0.0f},
+	{-0.2f, 0.6f},
+	{0.0f, 0.0f},
+	{-0.2f, 0.5f},
+	{0.3f, 0.0f},
+	{-0.1f, 0.2f},
+	{0.f, 0.f},
+	{0.f, 0.1f},
+	{0.3f, 0.2f},
+	{-0.1f, 0.1f},
+	{0.2f, 0.3f},
+	{-0.0f, 0.0f},
+	{0.4f, 0.1f},
+	{-0.4f, 0.2f},
+	{0.0f, 0.0f},
+	{-0.0f, 0.0f},
+	{0.3f, 0.1f},
+	{-0.2f, 0.3f},
+	{0.1f, 0.0f},
+	{-0.2f, 0.5f},
+	};
 }
 
 bool AFpsWeaponBase::GetWeaponDataByID(const FName WeaponID, FWeaponData& OutWeaponData) const
@@ -128,18 +177,20 @@ void AFpsWeaponBase::FireTick(const float DeltaTime)
 			switch (WeaponData.FireMode)
 			{
 			case EWeaponFireMode::Single:
-				//Fire_OnServer();
+				Fire_OnServer();
 				bIsFiring = false; // Сброс после выстрела
 				break;
 			case EWeaponFireMode::Burst:
-				//StartBurstFire();
+				bIsBurstFiring = true;
+				CurrentBurstShotIndex = 0;
+				StartBurstFire();
 				break;
 			case EWeaponFireMode::Auto:
 				Fire_OnServer();
-				CurrentAmmo--;
 				break;
 			}
-        
+
+			CurrentAmmo--;
 			FireTimer = RateOfFire;
 		}
 		else
@@ -173,11 +224,52 @@ void AFpsWeaponBase::OnRep_CurrentAmmo() const
 	// Патроны изменились, например вызов делегата на клиенте
 }
 
+void AFpsWeaponBase::StartBurstFire_Implementation()
+{
+	if (CurrentAmmo <= 0)
+	{
+		GetWorldTimerManager().ClearTimer(FireBurstTimerHandle);
+		bIsBurstFiring = false;
+		bIsFiring = false;
+		ServerReloadRequest();
+		return;
+	}
+	
+	if (CurrentBurstShotIndex >= ShotsPerBurst)
+	{
+		GetWorldTimerManager().ClearTimer(FireBurstTimerHandle);
+		CurrentBurstShotIndex = 0;
+		bIsBurstFiring = false;
+		return;
+	}
+
+	Fire_OnServer();
+	CurrentAmmo--;
+	CurrentBurstShotIndex++;
+
+	GetWorldTimerManager().SetTimer(FireBurstTimerHandle, this, &AFpsWeaponBase::StartBurstFire, WeaponData.BurstDelay, false);
+}
+
 void AFpsWeaponBase::Multicast_PlayMontageReload_Implementation()
 {
-	if (FirstPersonCharacterMesh && FirstPersonCharacterMesh->GetAnimInstance() && FirstPersonFireAnimation)
+	if (FirstPersonCharacterMesh && FirstPersonCharacterMesh->GetAnimInstance() && FirstPersonReloadAnimation)
 	{
 		FirstPersonCharacterMesh->GetAnimInstance()->Montage_Play(FirstPersonReloadAnimation);
+	}
+
+	if (FirstPersonWeaponMesh && FirstPersonWeaponMesh->GetAnimInstance() && WeaponReloadAnimation)
+	{
+		FirstPersonWeaponMesh->GetAnimInstance()->Montage_Play(WeaponReloadAnimation);
+	}
+
+	if (ThirdPersonCharacterMesh && ThirdPersonCharacterMesh->GetAnimInstance() && ThirdPersonReloadAnimation)
+	{
+		ThirdPersonCharacterMesh->GetAnimInstance()->Montage_Play(ThirdPersonReloadAnimation);
+	}
+
+	if (ThirdPersonWeaponMesh && ThirdPersonWeaponMesh->GetAnimInstance() && WeaponReloadAnimation)
+	{
+		ThirdPersonWeaponMesh->GetAnimInstance()->Montage_Play(WeaponReloadAnimation);
 	}
 }
 
@@ -188,13 +280,9 @@ void AFpsWeaponBase::ServerReloadRequest_Implementation()
 	
 	bIsReloading = true;
 	UE_LOG(LogTemp, Warning, TEXT("Server: Reload started"));
+	
 	Multicast_PlayMontageReload();
-	
-	if (WeaponReloadAnimation)
-	{
-		ReloadTime = WeaponReloadAnimation->GetPlayLength();
-	}
-	
+
 	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AFpsWeaponBase::FinishReloading, ReloadTime, false);
 }
 
@@ -211,9 +299,7 @@ void AFpsWeaponBase::Multicast_PlayFireAnimation_Implementation()
 		{
 			FirstPersonWeaponMesh->GetAnimInstance()->Montage_Play(WeaponFireAnimation);
 		}
-	}
-	else
-	{
+
 		if (ThirdPersonCharacterMesh && ThirdPersonCharacterMesh->GetAnimInstance() && ThirdPersonFireAnimation)
 		{
 			ThirdPersonCharacterMesh->GetAnimInstance()->Montage_Play(ThirdPersonFireAnimation);
@@ -230,8 +316,30 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 	if (!OwnerPlayer || !OwningController) return;
 
 	const FVector FireStartPoint = OwnerPlayer->GetCameraLocation();
-	const FVector FireForwardVector = UKismetMathLibrary::GetForwardVector(OwnerPlayer->GetControlRotation_Rep());
-	const FRotator BaseRotation = UKismetMathLibrary::MakeRotFromX(FireForwardVector); //Посчитать разброс BaseRotation
+	const FRotator ControlRotation = OwnerPlayer->GetControlRotation_Rep();
+	const FVector Forward = ControlRotation.Vector();
+	const FRotator BaseRotation = UKismetMathLibrary::MakeRotFromX(Forward);
+
+	FVector SpreadDir;
+	if (RecoilPattern.IsValidIndex(ShotsFired))
+	{
+		FVector2D Recoil = RecoilPattern[ShotsFired];
+		
+		Recoil.X += FMath::FRandRange(-0.05f, 0.05f);
+		Recoil.Y += FMath::FRandRange(-0.05f, 0.05f);
+
+		FRotator SpreadRot = BaseRotation;
+		SpreadRot.Yaw += Recoil.X * WeaponData.SpreadAngle;
+		SpreadRot.Pitch -= Recoil.Y * WeaponData.SpreadAngle;
+
+		SpreadDir = SpreadRot.Vector();
+	}
+	else
+	{
+		SpreadDir = BaseRotation.Vector();
+	}
+	const FRotator FinalRotation = SpreadDir.Rotation();
+		
 
 	UWorld* World = GetWorld();
 	
@@ -242,11 +350,26 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 		Hit,
 		FireStartPoint,
 		TraceEnd,
-		ECC_GameTraceChannel2, // Используем ваш канал
+		ECC_GameTraceChannel2,
 		FCollisionQueryParams(SCENE_QUERY_STAT(WeaponTrace), true, OwnerPlayer)
 	);
-	
 
+	if (WeaponData.ProjectileClass)
+	{
+		const FVector SpawnLocation = FirstPersonWeaponMesh->GetSocketLocation(WeaponData.MuzzleSocketName);
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = OwnerPlayer;
+		SpawnParams.Instigator = OwnerPlayer;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
+
+		if (AFpsBulletBase* Projectile = World->SpawnActor<AFpsBulletBase>(WeaponData.ProjectileClass, SpawnLocation, FinalRotation, SpawnParams))
+		{
+			Projectile->SetDamage(WeaponData.Damage);
+		}
+	}
+
+	
 	if (Hit.bBlockingHit)
 	{
 		Multicast_PlayHitEffects(Hit);
@@ -254,7 +377,7 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 		if (Hit.GetComponent() && Hit.GetComponent()->IsSimulatingPhysics())
 		{
 			Hit.GetComponent()->AddImpulseAtLocation(
-				BaseRotation.Vector() * 1000000.f,
+				SpreadDir  * 1000000.f,
 				Hit.Location,
 				Hit.BoneName
 			);
@@ -264,7 +387,7 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 			UGameplayStatics::ApplyPointDamage(
 				Hit.GetActor(),
 				WeaponData.Damage,
-				BaseRotation.Vector(),
+				SpreadDir,
 				Hit,
 				OwningController,
 				this,
@@ -278,23 +401,24 @@ void AFpsWeaponBase::Fire_OnServer_Implementation()
 	// Визуализация трейса
 	if (World)
 	{
-		// Цвет линии, если есть попадание
+		
 		FColor LineColor = Hit.bBlockingHit ? FColor::Red : FColor::Green;
 
 		// Рисуем линию трейса
 		DrawDebugLine(
 			World,
 			FireStartPoint,
-			Hit.bBlockingHit ? Hit.ImpactPoint : TraceEnd, // Конечная точка зависит от наличия попадания
+			Hit.bBlockingHit ? Hit.ImpactPoint : TraceEnd, 
 			LineColor,
-			false, // PersistentLines: если true, линия будет отображаться постоянно
-			5.0f,  // Duration: время отображения линии (в секундах)
-			0,     // DepthPriority
-			1.0f   // Thickness: толщина линии
+			false, 
+			5.0f,  
+			0,    
+			0.2f  
 		);
 	}
-
-	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("FireTick"));
+	ShotsFired++;
+	World->GetTimerManager().ClearTimer(RecoilResetTimer);
+	World->GetTimerManager().SetTimer(RecoilResetTimer, this, &AFpsWeaponBase::ResetRecoil, 0.2, false);
 }
 
 void AFpsWeaponBase::ChangeFireStatus_OnServer_Implementation(const bool bNewFireStatus)

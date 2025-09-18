@@ -124,7 +124,7 @@ void AFpsBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::StartJump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AFpsBaseCharacter::StopJump);
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::ToggleCrouch);
-		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Started, this, &AFpsBaseCharacter::FireStart);
+		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Triggered, this, &AFpsBaseCharacter::FireStart);
 		EnhancedInputComponent->BindAction(Fire, ETriggerEvent::Completed, this, &AFpsBaseCharacter::FireStop);
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Completed, this, &AFpsBaseCharacter::ReloadWeapon);
 	}
@@ -209,7 +209,7 @@ void AFpsBaseCharacter::UpdateMeshVisibility(const bool bAlive)
 
 void AFpsBaseCharacter::FireStart()
 {
-	if(CurrentWeapon->bIsReloading || !CurrentWeapon) return; 
+	if(!CurrentWeapon) return; 
 	if (CurrentWeapon) CurrentWeapon->ChangeFireStatus(true);
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Button"));
 }

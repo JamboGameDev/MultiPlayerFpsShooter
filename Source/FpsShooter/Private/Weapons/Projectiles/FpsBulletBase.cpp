@@ -90,8 +90,9 @@ void AFpsBulletBase::BulletHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
 		PlayImpactEffects_Multicast(Hit);
 		Destroy();
 	}
-
+	
 	PlayImpactEffects_Multicast(Hit);
+	Destroy();
 }
 
 void AFpsBulletBase::PlayImpactEffects_Multicast_Implementation(const FHitResult& Hit)

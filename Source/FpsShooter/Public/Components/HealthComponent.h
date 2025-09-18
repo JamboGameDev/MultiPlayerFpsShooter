@@ -85,7 +85,7 @@ private:
 
 	// Чисто серверная логика урона с валидацией
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_TakeDamage(const float Damage);
+	void Server_TakeDamage(const float Damage); 
 	
 	// Чисто серверная логика лечения
 	UFUNCTION(Server, Reliable)

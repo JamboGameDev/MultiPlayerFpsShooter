@@ -64,8 +64,6 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	
-
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USceneComponent* SceneRoot;
@@ -75,7 +73,6 @@ private:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ThirdPersonWeaponMesh;
-
 	
 	UPROPERTY()
 	USkeletalMeshComponent* FirstPersonCharacterMesh;
@@ -90,9 +87,22 @@ private:
 	float FireTimer = 0.0f;
 	float ReloadTime = 2.0f;
 	float RateOfFire = 1.0f;
+	float TimeBetweenShots = 0.1f;
+
+	//Pattern Recoil
+	int32 ShotsFired = 0;
+	FTimerHandle RecoilResetTimer;
+
+	UPROPERTY()
+	TArray<FVector2D> RecoilPattern;
+
+	void ResetRecoil();
+	void IniRecoilPattern();
+	
 	FTimerHandle FireBurstTimerHandle; 
-	int32 CurrentBurstShotIndex = 0; 
-	FTimerHandle ReloadTimerHandle; 
+	int32 CurrentBurstShotIndex = 0;
+	int32 ShotsPerBurst = 3;
+	FTimerHandle ReloadTimerHandle;
 
 	// Рабочие функции для работы оружия
 	bool GetWeaponDataByID(const FName WeaponID, FWeaponData& OutWeaponData) const;
@@ -124,6 +134,9 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void Fire_OnServer();
+
+	UFUNCTION(Server, Reliable)
+	void StartBurstFire();
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayFireAnimation();
